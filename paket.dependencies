@@ -2,3 +2,8 @@ source https://api.nuget.org/v3/index.json
 storage: none
 
 nuget Fake.Core.CommandLineParsing
+nuget FSharp.Core
+nuget Microsoft.CodeAnalysis.CSharp
+nuget NodaTime
+nuget Optional
+nuget System.CodeDom

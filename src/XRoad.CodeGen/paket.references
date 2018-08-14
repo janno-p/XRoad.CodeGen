@@ -1,1 +1,4 @@
 ﻿Fake.Core.CommandLineParsing
+FSharp.Core
+Microsoft.CodeAnalysis.CSharp
+System.CodeDom

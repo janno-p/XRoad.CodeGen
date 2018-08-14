@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Attributes.fs" />
+    <Compile Include="Choices.fs" />
+    <Compile Include="XmlExtensions.fs" />
+    <Compile Include="SoapExtensions.fs" />
+    <Compile Include="SerializationBase.fs" />
+    <Compile Include="EmitterDsl.fs" />
+    <Compile Include="Emitter.fs" />
+    <Compile Include="Serialization.fs" />
+    <None Include="paket.references" />
+  </ItemGroup>
+  <Import Project="..\..\NetFx.props" />
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

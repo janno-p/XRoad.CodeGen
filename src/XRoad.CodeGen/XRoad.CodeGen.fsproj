@@ -4,7 +4,18 @@
     <TargetFramework>netcoreapp2.1</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\XRoad.Runtime\XRoad.Runtime.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Common.fs" />
+    <Compile Include="Wsdl.fs" />
+    <Compile Include="TypeSchema.fs" />
+    <Compile Include="CodeDom.fs" />
+    <Compile Include="Http.fs" />
+    <Compile Include="ServiceDescription.fs" />
+    <Compile Include="TypeBuilder.fs" />
+    <Compile Include="ProducerDefinition.fs" />
     <Compile Include="Cli.fs" />
     <Compile Include="Program.fs" />
     <None Include="paket.references" />
