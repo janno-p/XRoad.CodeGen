@@ -1,6 +1,7 @@
 module internal XRoad.CodeGen.CodeDom
 
 open Microsoft.CSharp
+open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 open Microsoft.FSharp.Core.CompilerServices
 open System
@@ -9,6 +10,8 @@ open System.CodeDom.Compiler
 open System.Diagnostics
 open System.Globalization
 open System.IO
+open System.Reflection
+open System.Text
 open TypeSchema
 open XRoad.Runtime
 
@@ -234,6 +237,13 @@ module Arr =
     let first arr = CodeArrayIndexerExpression(arr, !^ 0)
 
 module Compiler =
+    let generateSourceCode codeCompileUnit =
+        let output = StringBuilder()
+        use codeProvider = new CSharpCodeProvider()
+        use writer = new StringWriter(output)
+        codeProvider.GenerateCodeFromCompileUnit(codeCompileUnit, writer, CodeGeneratorOptions())
+        output.ToString()
+
     /// Builds new assembly for provided namespace.
     let buildAssembly codeNamespace =
         let codeCompileUnit = CodeCompileUnit()
@@ -246,17 +256,41 @@ module Compiler =
         codeCompileUnit.ReferencedAssemblies.Add("System.Net.dll") |> ignore
         codeCompileUnit.ReferencedAssemblies.Add("System.Numerics.dll") |> ignore
         codeCompileUnit.ReferencedAssemblies.Add("System.Xml.dll") |> ignore
-        // Assembly is placed under temporary files path.
-        let fileName = Path.Combine(Path.GetTempPath(), Guid.NewGuid() |> sprintf "%A.dll")
-        use codeProvider = new CSharpCodeProvider()
-        let parameters = CompilerParameters(OutputAssembly=fileName, GenerateExecutable=false)
-        //parameters.CompilerOptions <- "/doc:" + Path.ChangeExtension(fileName, "xml")
-        ( use wr = new StreamWriter(File.Open(Path.ChangeExtension(fileName, "cs"), FileMode.Create, FileAccess.Write))
-          codeProvider.GenerateCodeFromCompileUnit(codeCompileUnit, wr, CodeGeneratorOptions()))
-        let compilerResults = codeProvider.CompileAssemblyFromDom(parameters, [| codeCompileUnit |])
-        if compilerResults.Errors.Count > 0 then
-            printfn "%A" compilerResults.Errors
-        compilerResults.CompiledAssembly
+
+        let syntaxTree = CSharpSyntaxTree.ParseText(generateSourceCode codeCompileUnit)
+        let assemblyName = Path.GetRandomFileName()
+
+        let compilation =
+            CSharpCompilation.Create(
+                assemblyName,
+                syntaxTrees = [
+                    syntaxTree
+                ],
+                references = [
+                    MetadataReference.CreateFromFile(typeof<obj>.GetTypeInfo().Assembly.Location)
+                    MetadataReference.CreateFromFile(typeof<XRoadHeader>.GetTypeInfo().Assembly.Location)
+                    MetadataReference.CreateFromFile(Assembly.Load("netstandard").Location)
+                    MetadataReference.CreateFromFile(Assembly.Load("FSharp.Core").Location)
+                    MetadataReference.CreateFromFile(Assembly.Load("System.Private.Uri").Location)
+                    MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location)
+                ],
+                options = CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+            )
+
+        use output = new MemoryStream()
+        let emitResult = compilation.Emit(output)
+
+        if emitResult.Success then
+            printfn "Compilation successful!"
+            output.Seek(0L, SeekOrigin.Begin) |> ignore
+            let fileName = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") |> sprintf "%s.dll")
+            File.WriteAllBytes(fileName, output.ToArray())
+            printfn "Assembly generated to location: `%s`" fileName
+        else
+            eprintfn "Compilation failed!"
+            emitResult.Diagnostics
+            |> Seq.filter (fun d -> d.IsWarningAsError || d.Severity = DiagnosticSeverity.Error)
+            |> Seq.iter (fun d -> eprintfn "\t%s: %s" d.Id (d.GetMessage()))
 
 /// Extensions for String module and class.
 [<AutoOpen>]

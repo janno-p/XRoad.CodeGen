@@ -9,9 +9,17 @@ type Verbosity =
     | Normal
     | Verbose
 
+type MainOptions =
+    {
+        Location: string
+        LanguageCode: string
+        Services: string list
+    }
+
 type CliAction =
     | ShowVersion
     | ShowHelp
+    | Main of MainOptions
     | InvalidUsage of string
 
 let printVersion () =
@@ -29,6 +37,9 @@ let handleAction (verbosity: Verbosity) (action: CliAction) =
     | ShowHelp ->
         printf "%s" Cli.Usage
         0
+    | Main options ->
+        ProducerDefinition.makeProducerType (["Ns"], "Root", options.Location, options.LanguageCode, options.Services)
+        0
     | InvalidUsage str ->
         eprintfn "%s" str
         printfn "%s" Cli.Usage
@@ -43,7 +54,19 @@ let parseAction (options: DocoptMap) =
         elif options |> DocoptResult.hasFlag "--help" then
             ShowHelp
         else
-            InvalidUsage "Please specify what you want to do!"
+            match options |> DocoptResult.tryGetArgument "<wsdl-location>" with
+            | Some(location) ->
+                let languageCode =
+                    options
+                    |> DocoptResult.tryGetArgument("--language")
+                    |> Option.defaultValue "et"
+                let services =
+                    options
+                    |> DocoptResult.tryGetArguments("--service")
+                    |> Option.defaultValue []
+                Main { Location = location; LanguageCode = languageCode; Services = services }
+            | None ->
+                InvalidUsage "Please specify what you want to do!"
     )
 
 [<EntryPoint>]

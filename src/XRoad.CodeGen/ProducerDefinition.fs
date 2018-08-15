@@ -217,7 +217,7 @@ module ServiceBuilder =
 
 /// Builds all types, namespaces and services for give producer definition.
 /// Called by type provider to retrieve assembly details for generated types.
-let makeProducerType (typeNamePath: string [], uri, languageCode, operationFilter) =
+let makeProducerType (targetNamespace: string seq, targetName, uri, languageCode, operationFilter) =
     // Load schema details from specified file or network location.
     let schema = ProducerDescription.Load(resolveUri uri, languageCode, operationFilter)
 
@@ -248,7 +248,7 @@ let makeProducerType (typeNamePath: string [], uri, languageCode, operationFilte
 
     // Main class that wraps all provided functionality and types.
     let targetClass =
-        Cls.create typeNamePath.[typeNamePath.Length - 1]
+        Cls.create targetName
         |> Cls.setAttr TypeAttributes.Public
         |> Cls.asStatic
         |> Cls.addMember serviceTypesTy
@@ -319,9 +319,8 @@ let makeProducerType (typeNamePath: string [], uri, languageCode, operationFilte
     context.CachedNamespaces |> Seq.iter (fun kvp -> kvp.Value |> serviceTypesTy.Members.Add |> ignore)
 
     // Initialize default namespace to hold main type.
-    let codeNamespace = CodeNamespace(String.Join(".", Array.sub typeNamePath 0 (typeNamePath.Length - 1)))
+    let codeNamespace = CodeNamespace(String.Join(".", targetNamespace))
     codeNamespace.Types.Add(targetClass) |> ignore
 
     // Compile the assembly and return to type provider.
-    let assembly = Compiler.buildAssembly(codeNamespace)
-    assembly.GetType(sprintf "%s.%s" codeNamespace.Name targetClass.Name)
+    Compiler.buildAssembly(codeNamespace)
