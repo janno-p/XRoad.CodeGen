@@ -9,7 +9,7 @@
     <ProjectReference Include="..\XRoad.Runtime\XRoad.Runtime.fsproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\packages\dependencies\NETStandard.Library\build\netstandard2.0\ref\*">
+    <None Include="..\..\packages\dependencies\NETStandard.Library\build\netstandard2.0\ref\*.dll">
       <PackageCopyToOutput>true</PackageCopyToOutput>
       <Link>ref\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
