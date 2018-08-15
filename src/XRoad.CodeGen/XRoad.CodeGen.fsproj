@@ -1,12 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
     <TargetFramework>netcoreapp2.1</TargetFramework>
+    <ToolCommandName>xroad-codegen</ToolCommandName>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\XRoad.Runtime\XRoad.Runtime.fsproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\packages\dependencies\NETStandard.Library\build\netstandard2.0\ref\*">
+      <PackageCopyToOutput>true</PackageCopyToOutput>
+      <Link>ref\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Common.fs" />
     <Compile Include="Wsdl.fs" />

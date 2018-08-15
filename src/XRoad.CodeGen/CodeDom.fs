@@ -264,6 +264,7 @@ module Compiler =
         options.SourceFileName |> Option.iter (fun fileName -> File.WriteAllText(fileName, sourceCode))
 
         let syntaxTree = CSharpSyntaxTree.ParseText(sourceCode)
+        let ref = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "ref")
 
         let compilation =
             CSharpCompilation.Create(
@@ -272,8 +273,8 @@ module Compiler =
                     syntaxTree
                 ],
                 references = [
-                    MetadataReference.CreateFromFile(@"packages\netstandard.library.2.0.3\build\netstandard2.0\ref\netstandard.dll")
-                    MetadataReference.CreateFromFile(@"packages\netstandard.library.2.0.3\build\netstandard2.0\ref\System.Runtime.dll")
+                    MetadataReference.CreateFromFile(Path.Combine(ref, "netstandard.dll"))
+                    MetadataReference.CreateFromFile(Path.Combine(ref, "System.Runtime.dll"))
                     MetadataReference.CreateFromFile(typeof<XRoadHeader>.GetTypeInfo().Assembly.Location)
                     MetadataReference.CreateFromFile(typeof<FSharp.Core.AutoOpenAttribute>.GetTypeInfo().Assembly.Location)
                     MetadataReference.CreateFromFile(typeof<NodaTime.SystemClock>.GetTypeInfo().Assembly.Location)
