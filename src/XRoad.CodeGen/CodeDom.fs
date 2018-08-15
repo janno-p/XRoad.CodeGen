@@ -14,6 +14,7 @@ open System.Reflection
 open System.Text
 open TypeSchema
 open XRoad.Runtime
+open Optional
 
 /// Get type reference from generic argument.
 let typeRef<'T> = CodeTypeReference(typeof<'T>)
@@ -245,9 +246,11 @@ module Compiler =
         output.ToString()
 
     /// Builds new assembly for provided namespace.
-    let buildAssembly codeNamespace =
+    let buildAssembly (options: CodeGenOptions) (codeNamespaces: CodeNamespace list) =
         let codeCompileUnit = CodeCompileUnit()
-        codeCompileUnit.Namespaces.Add(codeNamespace) |> ignore
+
+        codeCompileUnit.Namespaces.AddRange(codeNamespaces |> List.toArray) |> ignore
+
         codeCompileUnit.ReferencedAssemblies.Add(typeof<ITypeProvider>.Assembly.Location) |> ignore
         codeCompileUnit.ReferencedAssemblies.Add(typeof<BinaryContent>.Assembly.Location) |> ignore
         codeCompileUnit.ReferencedAssemblies.Add(typeof<NodaTime.LocalDate>.Assembly.Location) |> ignore
@@ -257,22 +260,24 @@ module Compiler =
         codeCompileUnit.ReferencedAssemblies.Add("System.Numerics.dll") |> ignore
         codeCompileUnit.ReferencedAssemblies.Add("System.Xml.dll") |> ignore
 
-        let syntaxTree = CSharpSyntaxTree.ParseText(generateSourceCode codeCompileUnit)
-        let assemblyName = Path.GetRandomFileName()
+        let sourceCode = generateSourceCode codeCompileUnit
+        options.SourceFileName |> Option.iter (fun fileName -> File.WriteAllText(fileName, sourceCode))
+
+        let syntaxTree = CSharpSyntaxTree.ParseText(sourceCode)
 
         let compilation =
             CSharpCompilation.Create(
-                assemblyName,
+                options.AssemblyName,
                 syntaxTrees = [
                     syntaxTree
                 ],
                 references = [
-                    MetadataReference.CreateFromFile(typeof<obj>.GetTypeInfo().Assembly.Location)
+                    MetadataReference.CreateFromFile(@"packages\netstandard.library.2.0.3\build\netstandard2.0\ref\netstandard.dll")
+                    MetadataReference.CreateFromFile(@"packages\netstandard.library.2.0.3\build\netstandard2.0\ref\System.Runtime.dll")
                     MetadataReference.CreateFromFile(typeof<XRoadHeader>.GetTypeInfo().Assembly.Location)
-                    MetadataReference.CreateFromFile(Assembly.Load("netstandard").Location)
-                    MetadataReference.CreateFromFile(Assembly.Load("FSharp.Core").Location)
-                    MetadataReference.CreateFromFile(Assembly.Load("System.Private.Uri").Location)
-                    MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location)
+                    MetadataReference.CreateFromFile(typeof<FSharp.Core.AutoOpenAttribute>.GetTypeInfo().Assembly.Location)
+                    MetadataReference.CreateFromFile(typeof<NodaTime.SystemClock>.GetTypeInfo().Assembly.Location)
+                    MetadataReference.CreateFromFile(typeof<Optional.OptionExtensions>.GetTypeInfo().Assembly.Location)
                 ],
                 options = CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
             )
@@ -283,9 +288,13 @@ module Compiler =
         if emitResult.Success then
             printfn "Compilation successful!"
             output.Seek(0L, SeekOrigin.Begin) |> ignore
-            let fileName = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") |> sprintf "%s.dll")
-            File.WriteAllBytes(fileName, output.ToArray())
-            printfn "Assembly generated to location: `%s`" fileName
+            let assemblyFileName =
+                options.DllFileName
+                |> Option.defaultWith (fun () ->
+                    Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") |> sprintf "%s.dll")
+                )
+            File.WriteAllBytes(assemblyFileName, output.ToArray())
+            printfn "Assembly generated to location: `%s`" assemblyFileName
         else
             eprintfn "Compilation failed!"
             emitResult.Diagnostics
@@ -297,43 +306,9 @@ module Compiler =
 module String =
     let isNullOrEmpty = String.IsNullOrEmpty
 
-#if NET40
-    // http://www.ecma-international.org/publications/files/ECMA-ST/Ecma-334.pdf
-
-    let isLetterCharacter (ch: char) =
-        match CharUnicodeInfo.GetUnicodeCategory(ch) with
-        | UnicodeCategory.UppercaseLetter
-        | UnicodeCategory.LowercaseLetter
-        | UnicodeCategory.TitlecaseLetter
-        | UnicodeCategory.ModifierLetter
-        | UnicodeCategory.OtherLetter
-        | UnicodeCategory.LetterNumber -> true
-        | _ -> false
-
-    let isCombiningCharacter (ch: char) =
-        match CharUnicodeInfo.GetUnicodeCategory(ch) with
-        | UnicodeCategory.NonSpacingMark
-        | UnicodeCategory.SpacingCombiningMark -> true
-        | _ -> false
-
-    let inline private isDecimalDigitCharacter (ch: char) = CharUnicodeInfo.GetUnicodeCategory(ch) = UnicodeCategory.DecimalDigitNumber
-    let inline private isConnectingCharacter (ch: char) = CharUnicodeInfo.GetUnicodeCategory(ch) = UnicodeCategory.ConnectorPunctuation
-    let inline private isFormattingCharacter (ch: char) = CharUnicodeInfo.GetUnicodeCategory(ch) = UnicodeCategory.Format
-    let inline private isUnderscoreCharacter (ch: char) = ch = '_'
-    let inline private isIdentifierStartCharacter (ch: char) = isLetterCharacter ch || isUnderscoreCharacter ch
-
-    let private isIdentifierPartCharacter (ch: char) =
-        isLetterCharacter ch || isDecimalDigitCharacter ch || isConnectingCharacter ch || isCombiningCharacter ch || isFormattingCharacter ch
-
-    let private isValidIdentifier (name: string) =
-        if name |> isNullOrEmpty then false else
-        if isIdentifierStartCharacter name.[0] |> not then false else
-        Array.TrueForAll(name.ToCharArray() |> Array.skip 1, Predicate(isIdentifierPartCharacter))
-#else
     let private isIdentifierPartCharacter = SyntaxFacts.IsIdentifierPartCharacter
     let private isIdentifierStartCharacter = SyntaxFacts.IsIdentifierStartCharacter
     let private isValidIdentifier = SyntaxFacts.IsValidIdentifier
-#endif
 
     /// Joins sequence of elements with given separator to string.
     let join (sep: string) (arr: seq<'T>) = String.Join(sep, arr)

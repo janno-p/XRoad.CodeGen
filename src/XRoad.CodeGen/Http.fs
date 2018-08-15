@@ -43,9 +43,6 @@ let post (stream: Stream) uri =
 let getXDocument (uri: Uri) =
     if uri.Scheme.ToLower() = "https" then
         let request = uri |> createRequest
-#if NET40
-        use _d = acceptServerCertificate()
-#endif
         use response = request.GetResponse()
         use responseStream = response.GetResponseStream()
         XDocument.Load(responseStream)

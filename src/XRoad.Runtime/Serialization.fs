@@ -82,11 +82,9 @@ type internal XRoadRequest(uri: Uri, methodMap: MethodMap, acceptedServerCertifi
     let request =
         let request = WebRequest.Create(uri, Method="POST", ContentType="text/xml; charset=utf-8") |> unbox<HttpWebRequest>
         request.Headers.Set("SOAPAction", "")
-#if !NET40
         if acceptedServerCertificate |> isNull |> not then
             request.ServerCertificateValidationCallback <-
                 (fun _ cert _ errors -> if errors = SslPolicyErrors.None then true else cert = acceptedServerCertificate)
-#endif
         authenticationCertificates |> Seq.iter (request.ClientCertificates.Add >> ignore)
         request
 

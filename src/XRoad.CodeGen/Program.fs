@@ -9,17 +9,10 @@ type Verbosity =
     | Normal
     | Verbose
 
-type MainOptions =
-    {
-        Location: string
-        LanguageCode: string
-        Services: string list
-    }
-
 type CliAction =
     | ShowVersion
     | ShowHelp
-    | Main of MainOptions
+    | Main of CodeGenOptions
     | InvalidUsage of string
 
 let printVersion () =
@@ -38,7 +31,7 @@ let handleAction (verbosity: Verbosity) (action: CliAction) =
         printf "%s" Cli.Usage
         0
     | Main options ->
-        ProducerDefinition.makeProducerType (["Ns"], "Root", options.Location, options.LanguageCode, options.Services)
+        ProducerDefinition.makeProducerType options
         0
     | InvalidUsage str ->
         eprintfn "%s" str
@@ -54,18 +47,29 @@ let parseAction (options: DocoptMap) =
         elif options |> DocoptResult.hasFlag "--help" then
             ShowHelp
         else
-            match options |> DocoptResult.tryGetArgument "<wsdl-location>" with
-            | Some(location) ->
-                let languageCode =
-                    options
-                    |> DocoptResult.tryGetArgument("--language")
-                    |> Option.defaultValue "et"
-                let services =
-                    options
-                    |> DocoptResult.tryGetArguments("--service")
-                    |> Option.defaultValue []
-                Main { Location = location; LanguageCode = languageCode; Services = services }
-            | None ->
+            match options |> DocoptResult.tryGetArgument("<assembly-name>"), options |> DocoptResult.tryGetArgument "<wsdl-location>" with
+            | (Some(assemblyName), Some(location)) ->
+                {
+                    AssemblyName = assemblyName
+                    Location = location
+                    LanguageCode =
+                        options
+                        |> DocoptResult.tryGetArgument("--language")
+                    Services =
+                        options
+                        |> DocoptResult.tryGetArguments("--service")
+                        |> Option.defaultValue []
+                    RootNamespace =
+                        options
+                        |> DocoptResult.tryGetArgument("--namespace")
+                    DllFileName =
+                        options
+                        |> DocoptResult.tryGetArgument("--dll")
+                    SourceFileName =
+                        options
+                        |> DocoptResult.tryGetArgument("--source-file")
+                } |> Main
+            | _ ->
                 InvalidUsage "Please specify what you want to do!"
     )
 

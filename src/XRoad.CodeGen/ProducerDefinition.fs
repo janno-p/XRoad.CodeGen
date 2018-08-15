@@ -98,7 +98,7 @@ module ServiceBuilder =
                             | Definition(definition) ->
                                 let subTy = Cls.create (sprintf "%s_%sType" operation.Name name) |> Cls.addAttr TypeAttributes.Public |> Cls.describe (Attributes.xrdAnonymousType LayoutKind.Sequence)
                                 let ns = context.GetOrCreateNamespace(tns)
-                                ns.Members.Add(subTy) |> ignore
+                                ns.Types.Add(subTy) |> ignore
                                 let runtimeType = ProvidedType(subTy, providedTypeFullName ns.Name subTy.Name)
                                 TypeBuilder.build context runtimeType definition
                                 runtimeType
@@ -217,15 +217,20 @@ module ServiceBuilder =
 
 /// Builds all types, namespaces and services for give producer definition.
 /// Called by type provider to retrieve assembly details for generated types.
-let makeProducerType (targetNamespace: string seq, targetName, uri, languageCode, operationFilter) =
+let makeProducerType (options: CodeGenOptions) =
     // Load schema details from specified file or network location.
-    let schema = ProducerDescription.Load(resolveUri uri, languageCode, operationFilter)
+    let schema =
+        ProducerDescription.Load(
+            resolveUri options.Location,
+            options.LanguageCodeOrDefault,
+            options.Services
+        )
 
     // Initialize type and schema element lookup context.
-    let context = TypeBuilderContext.FromSchema(schema, languageCode)
+    let context = TypeBuilderContext.FromSchema(schema, options)
 
-    // Create base type which holds types generated from all provided schema-s.
-    let serviceTypesTy = Cls.create "DefinedTypes" |> Cls.setAttr TypeAttributes.Public |> Cls.asStatic
+    // Define root namespace to hold global types and other namespaces.
+    let rootNamespace = CodeNamespace(options.RootNamespaceOrDefault)
 
     // Create stubs for each type before building them, because of circular dependencies.
     schema.TypeSchemas
@@ -245,13 +250,6 @@ let makeProducerType (targetNamespace: string seq, targetName, uri, languageCode
         | CollectionType(_, _, None) -> None
         | rtyp -> Some(rtyp, x.Value))
     |> Seq.iter (fun (rtyp, def) -> TypeBuilder.build context rtyp def)
-
-    // Main class that wraps all provided functionality and types.
-    let targetClass =
-        Cls.create targetName
-        |> Cls.setAttr TypeAttributes.Public
-        |> Cls.asStatic
-        |> Cls.addMember serviceTypesTy
 
     // Create methods for all operation bindings.
     schema.Services
@@ -312,15 +310,13 @@ let makeProducerType (targetNamespace: string seq, targetName, uri, languageCode
 
             port.Methods
             |> List.iter (fun op -> portTy |> Cls.addMembers (ServiceBuilder.build context service.Namespace op) |> ignore))
-        targetClass |> Cls.addMember serviceTy |> ignore
+        rootNamespace.Types.Add(serviceTy) |> ignore
         )
 
-    // Create types for all type namespaces.
-    context.CachedNamespaces |> Seq.iter (fun kvp -> kvp.Value |> serviceTypesTy.Members.Add |> ignore)
-
-    // Initialize default namespace to hold main type.
-    let codeNamespace = CodeNamespace(String.Join(".", targetNamespace))
-    codeNamespace.Types.Add(targetClass) |> ignore
-
-    // Compile the assembly and return to type provider.
-    Compiler.buildAssembly(codeNamespace)
+    // Compile the assembly of generated namespaces.
+    Compiler.buildAssembly
+        options
+        [
+            yield rootNamespace
+            yield! context.CachedNamespaces |> Seq.map (fun kvp -> kvp.Value)
+        ]

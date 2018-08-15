@@ -11,11 +11,12 @@ open TypeSchema
 open Wsdl
 open XRoad.Runtime
 open XRoad.Runtime.Attributes
+open XRoad.Runtime.Choices
 
 [<AutoOpen>]
 module internal Pattern =
     /// Helper function to create full name for given type name.
-    let providedTypeFullName nsname name = sprintf "DefinedTypes.%s.%s" nsname name
+    let providedTypeFullName nsname name = sprintf "%s.%s" nsname name
 
     /// Active pattern which checks type definition against collection characteristics.
     /// Returns match if given type should be treated as CollectionType.
@@ -99,7 +100,7 @@ type internal TypeBuilderContext =
     { /// Provided types generated from type schema definitions.
       CachedTypes: Dictionary<SchemaName,RuntimeType>
       /// Provided types generated to group types from same namespace.
-      CachedNamespaces: Dictionary<XNamespace,CodeTypeDeclaration>
+      CachedNamespaces: Dictionary<XNamespace,CodeNamespace>
       /// Schema level attribute definition lookup.
       Attributes: Map<string,AttributeSpec>
       /// Schema level element definition lookup.
@@ -108,8 +109,8 @@ type internal TypeBuilderContext =
       Types: Map<string,SchemaTypeDefinition>
       /// X-Road protocol used by this producer.
       MessageProtocol: XRoadMessageProtocolVersion
-      /// Language code preferred for code comments.
-      LanguageCode: string }
+      /// Provided configuration values for generator output.
+      Options: CodeGenOptions }
     with
         /// Find generated type that corresponds to given namespace name.
         /// If type exists, the existing instance is used; otherwise new type is generated.
@@ -132,15 +133,17 @@ type internal TypeBuilderContext =
                     | XmlNamespace.XRoad20 -> "xtee"
                     | XmlNamespace.XRoad31Ee -> "xroad"
                     | ns -> ns.ToClassName()
+                let ns = CodeNamespace(String.Join('.', [this.Options.RootNamespaceOrDefault; producerName]))
                 let typ = Cls.create(producerName) |> Cls.addAttr TypeAttributes.Public
                 Fld.create<string> "__TargetNamespace__"
                 |> Fld.init (!^ nsname.NamespaceName)
                 |> Fld.setAttr (MemberAttributes.Public ||| MemberAttributes.Const)
                 |> Fld.addTo typ
                 |> ignore
-                this.CachedNamespaces.Add(nsname, typ)
-                typ
-            | true, typ -> typ
+                ns.Types.Add(typ) |> ignore
+                this.CachedNamespaces.Add(nsname, ns)
+                ns
+            | true, ns -> ns
 
         /// Get runtime type from cached types if exists; otherwise create the type.
         member this.GetOrCreateType(name: SchemaName) =
@@ -176,7 +179,7 @@ type internal TypeBuilderContext =
             | BinaryType(_) -> ContentType
             | SystemType(typ) -> PrimitiveType(typ)
             | _ ->
-                let nstyp = this.GetOrCreateNamespace(name.XName.Namespace)
+                let codens = this.GetOrCreateNamespace(name.XName.Namespace)
                 let schemaType =
                     match name with
                     | SchemaElement(xn) ->
@@ -195,16 +198,16 @@ type internal TypeBuilderContext =
                         let itemName = dspec.Name |> Option.get
                         let suffix = itemName.ToClassName()
                         let typ = Cls.create(name.XName.LocalName + suffix) |> Cls.addAttr TypeAttributes.Public |> Cls.describe (Attributes.xrdAnonymousType LayoutKind.Sequence)
-                        nstyp |> Cls.addMember typ |> ignore
-                        CollectionType(ProvidedType(typ, providedTypeFullName nstyp.Name typ.Name), itemName, Some(def))
+                        codens.Types.Add(typ) |> ignore
+                        CollectionType(ProvidedType(typ, providedTypeFullName codens.Name typ.Name), itemName, Some(def))
                 | _ ->
                     let attr =
                         match name with
                         | SchemaElement(_) -> Attributes.xrdAnonymousType LayoutKind.Sequence
                         | SchemaType(_) -> Attributes.xrdType name.XName LayoutKind.Sequence
                     let typ = Cls.create(name.XName.LocalName) |> Cls.addAttr TypeAttributes.Public |> Cls.describe attr
-                    nstyp |> Cls.addMember typ |> ignore
-                    ProvidedType(typ, providedTypeFullName nstyp.Name typ.Name)
+                    codens.Types.Add(typ) |> ignore
+                    ProvidedType(typ, providedTypeFullName codens.Name typ.Name)
 
         /// Finds element specification from schema-level element lookup.
         member this.GetElementSpec(name: XName) =
@@ -263,7 +266,7 @@ type internal TypeBuilderContext =
             findElementDefinition(spec)
 
         /// Initializes new context object from given schema definition.
-        static member FromSchema(schema, languageCode) =
+        static member FromSchema(schema, options: CodeGenOptions) =
             // Validates that schema contains single operation style, as required by X-Road specification.
             let messageProtocol =
                 let reduceStyle s1 s2 =
@@ -291,7 +294,7 @@ type internal TypeBuilderContext =
                   |> Seq.collect (fun (_,typ) -> typ.Types |> Seq.map (fun x -> x.Key.ToString(), x.Value))
                   |> Map.ofSeq
               MessageProtocol = messageProtocol
-              LanguageCode = languageCode }
+              Options = options }
 
 /// Functions and types to handle type building process.
 [<RequireQualifiedAccess>]
@@ -374,7 +377,7 @@ module internal TypeBuilder =
             |> List.fold (fun doc el ->
                 let lang = el |> attrOrDefault (xnsname "lang" XmlNamespace.Xml) "et"
                 (lang, el.Value)::doc) []
-            |> List.tryFind (fst >> ((=) context.LanguageCode))
+            |> List.tryFind (fst >> ((=) context.Options.LanguageCodeOrDefault))
             |> Option.map snd)
 
     let nameGenerator name =
@@ -399,7 +402,16 @@ module internal TypeBuilder =
             | _ -> None)
 
     let getChoiceInterface len =
-        if len > 0 && len < 9 then Some(CodeTypeReference(sprintf "XRoad.Choices.IChoiceOf%d" len)) else None
+        match len with
+        | 1 -> Some(typedefof<IChoiceOf1<_>>)
+        | 2 -> Some(typedefof<IChoiceOf2<_,_>>)
+        | 3 -> Some(typedefof<IChoiceOf3<_,_,_>>)
+        | 4 -> Some(typedefof<IChoiceOf4<_,_,_,_>>)
+        | 5 -> Some(typedefof<IChoiceOf5<_,_,_,_,_>>)
+        | 6 -> Some(typedefof<IChoiceOf6<_,_,_,_,_,_>>)
+        | 7 -> Some(typedefof<IChoiceOf7<_,_,_,_,_,_,_>>)
+        | 8 -> Some(typedefof<IChoiceOf8<_,_,_,_,_,_,_,_>>)
+        | _ -> None
 
     /// Collects property definitions from every content element of complexType.
     let rec private collectComplexTypeContentProperties choiceNameGen seqNameGen context (spec: ComplexTypeContentSpec) =
@@ -519,7 +531,9 @@ module internal TypeBuilder =
             |> Ctor.addStmt (Stmt.assign (Expr.this @=> "__id") (!+ "id"))
             |> Ctor.addStmt (Stmt.assign (Expr.this @=> "__value") (!+ "value"))
 
-        let choiceInterface = getChoiceInterface spec.Content.Length
+        let choiceInterface =
+            getChoiceInterface spec.Content.Length
+            |> Option.map CodeTypeReference
 
         let choiceName = choiceNameGenerator()
         let choiceType =

@@ -56,3 +56,23 @@ module private XRoadProtocolExtensions =
         | Version31Ee(_) -> isHeaderOf XmlNamespace.XRoad31Ee docLegacyHeaders
         | Version31Eu(_) -> isHeaderOf XmlNamespace.XRoad31Eu docLegacyHeaders
         | Version40(_) -> isHeaderOf XmlNamespace.XRoad40 docHeaders
+
+type CodeGenOptions =
+    {
+        AssemblyName: string
+        Location: string
+        LanguageCode: string option
+        Services: string list
+        RootNamespace: string option
+        DllFileName: string option
+        SourceFileName: string option
+    }
+    with
+        member this.LanguageCodeOrDefault =
+            this.LanguageCode |> Option.defaultValue "et"
+
+        member this.RootNamespaceOrDefault =
+            match this.RootNamespace with
+            | None -> this.AssemblyName
+            | Some(x) when x |> System.String.IsNullOrWhiteSpace -> this.AssemblyName
+            | Some(x) -> x
