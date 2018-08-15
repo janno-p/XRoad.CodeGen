@@ -291,9 +291,7 @@ module Compiler =
             output.Seek(0L, SeekOrigin.Begin) |> ignore
             let assemblyFileName =
                 options.DllFileName
-                |> Option.defaultWith (fun () ->
-                    Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") |> sprintf "%s.dll")
-                )
+                |> Option.defaultWith (fun () -> Path.ChangeExtension(options.AssemblyName, "dll"))
             File.WriteAllBytes(assemblyFileName, output.ToArray())
             printfn "Assembly generated to location: `%s`" assemblyFileName
         else

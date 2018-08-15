@@ -5,7 +5,7 @@ VisualStudioVersion = 15.0.26124.0
 MinimumVisualStudioVersion = 15.0.26124.0
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{7D58EDFE-EB89-46C0-9154-23924BFA3AE7}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "XRoad.CodeGen", "src\XRoad.CodeGen\XRoad.CodeGen.fsproj", "{F1BA2C04-3525-40C0-8588-5A627AF70A49}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "xroad-codegen", "src\xroad-codegen\xroad-codegen.fsproj", "{F1BA2C04-3525-40C0-8588-5A627AF70A49}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "XRoad.Runtime", "src\XRoad.Runtime\XRoad.Runtime.fsproj", "{C8F5100B-3C06-4DA9-A522-24797BB2BB44}"
 EndProject
